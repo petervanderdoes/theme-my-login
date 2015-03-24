@@ -623,7 +623,7 @@ if(typeof wpOnload=='function')wpOnload()
 	public function logout_url( $logout_url, $redirect ) {
 		$logout_url = self::get_page_link( 'logout' );
 		if ( $redirect )
-			$logout = add_query_arg( 'redirect_to', urlencode( $redirect ), $logout_url );
+            $logout_url = add_query_arg( 'redirect_to', urlencode( $redirect ), $logout_url );
 		return $logout_url;
 	}
 

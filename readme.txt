@@ -53,6 +53,8 @@ As of version 6.3, Theme My Login no longer ships with translation files. Transl
 
 Please visit http://www.jfarthing.com/development/theme-my-login.
 
+== Patches ==
+* Redirect of logout is wrong.
 
 == Changelog ==
 
