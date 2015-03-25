@@ -55,6 +55,8 @@ Please visit http://www.jfarthing.com/development/theme-my-login.
 
 == Patches ==
 * Redirect of logout is wrong.
+* Resolve several calls to deprecated functions.
+* Resolved double echo. A function was called that did an echo, but the function was echoed again.
 
 == Changelog ==
 
