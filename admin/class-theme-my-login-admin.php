@@ -132,7 +132,6 @@ class Theme_My_Login_Admin extends Theme_My_Login_Abstract {
 		) ) );
 		?>
 		<div id="<?php echo $options_key; ?>" class="wrap">
-			<?php screen_icon( 'options-general' ); ?>
 			<h2><?php echo esc_html( $title ); ?></h2>
 			<?php settings_errors(); ?>
 
@@ -244,7 +243,7 @@ class Theme_My_Login_Admin extends Theme_My_Login_Abstract {
 
 		// Check if legacy page exists
 		if ( $page_id = $this->get_option( 'page_id' ) ) {
-			$page = get_page( $page_id );
+			$page = get_post( $page_id );
 		} else {
 			$page = get_page_by_title( 'Login' );
 		}
