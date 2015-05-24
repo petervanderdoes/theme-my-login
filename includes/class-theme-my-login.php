@@ -21,7 +21,7 @@ class Theme_My_Login extends Theme_My_Login_Abstract {
 	 * @since 6.3.2
 	 * @const string
 	 */
-	const version = '6.3.11';
+	const version = '6.3.12';
 
 	/**
 	 * Holds options key
@@ -298,26 +298,56 @@ class Theme_My_Login extends Theme_My_Login_Abstract {
 						}
 					}
 
-					if ( isset( $_REQUEST['error'] ) && 'invalidkey' == $_REQUEST['error'] )
-						$this->errors->add( 'invalidkey', __( 'Sorry, that key does not appear to be valid.', 'theme-my-login' ) );
+					if ( isset( $_REQUEST['error'] ) ) {
+						if ( 'invalidkey' == $_REQUEST['error'] )
+							$this->errors->add( 'invalidkey', __( 'Sorry, that key does not appear to be valid.', 'theme-my-login' ) );
+						elseif ( 'expiredkey' == $_REQUEST['error'] )
+							$this->errors->add( 'expiredkey', __( 'Sorry, that key has expired. Please try again.', 'theme-my-login' ) );
+					}
 
 					do_action( 'lost_password' );
 					break;
 				case 'resetpass' :
 				case 'rp' :
-					$user = self::check_password_reset_key( $_REQUEST['key'], $_REQUEST['login'] );
+					// Dirty hack for now
+					global $rp_login, $rp_key;
 
-					if ( is_wp_error( $user ) ) {
-						$redirect_to = site_url( 'wp-login.php?action=lostpassword&error=invalidkey' );
-						wp_redirect( $redirect_to );
+					list( $rp_path ) = explode( '?', wp_unslash( $_SERVER['REQUEST_URI'] ) );
+					$rp_cookie = 'wp-resetpass-' . COOKIEHASH;
+					if ( isset( $_GET['key'] ) ) {
+						$value = sprintf( '%s:%s', wp_unslash( $_GET['login'] ), wp_unslash( $_GET['key'] ) );
+						setcookie( $rp_cookie, $value, 0, $rp_path, COOKIE_DOMAIN, is_ssl(), true );
+						wp_safe_redirect( remove_query_arg( array( 'key', 'login' ) ) );
 						exit;
 					}
 
-					if ( isset( $_POST['pass1'] ) && $_POST['pass1'] != $_POST['pass2'] ) {
-						$this->errors->add( 'password_reset_mismatch', __( 'The passwords do not match.', 'theme-my-login' ) );
-					} elseif ( isset( $_POST['pass1'] ) && ! empty( $_POST['pass1'] ) ) {
-						self::reset_password( $user, $_POST['pass1'] );
+					if ( isset( $_COOKIE[ $rp_cookie ] ) && 0 < strpos( $_COOKIE[ $rp_cookie ], ':' ) ) {
+						list( $rp_login, $rp_key ) = explode( ':', wp_unslash( $_COOKIE[ $rp_cookie ] ), 2 );
+						$user = check_password_reset_key( $rp_key, $rp_login );
+						if ( isset( $_POST['pass1'] ) && ! hash_equals( $rp_key, $_POST['rp_key'] ) ) {
+							$user = false;
+						}
+					} else {
+						$user = false;
+					}
 
+					if ( ! $user || is_wp_error( $user ) ) {
+						setcookie( $rp_cookie, ' ', time() - YEAR_IN_SECONDS, $rp_path, COOKIE_DOMAIN, is_ssl(), true );
+						if ( $user && $user->get_error_code() === 'expired_key' )
+							wp_redirect( site_url( 'wp-login.php?action=lostpassword&error=expiredkey' ) );
+						else
+							wp_redirect( site_url( 'wp-login.php?action=lostpassword&error=invalidkey' ) );
+						exit;
+					}
+
+					if ( isset( $_POST['pass1'] ) && $_POST['pass1'] != $_POST['pass2'] )
+						$this->errors->add( 'password_reset_mismatch', __( 'The passwords do not match.', 'theme-my-login' ) );
+
+					do_action( 'validate_password_reset', $this->errors, $user );
+
+					if ( ( ! $this->errors->get_error_code() ) && isset( $_POST['pass1'] ) && ! empty( $_POST['pass1'] ) ) {
+						self::reset_password( $user, $_POST['pass1'] );
+						setcookie( $rp_cookie, ' ', time() - YEAR_IN_SECONDS, $rp_path, COOKIE_DOMAIN, is_ssl(), true );
 						$redirect_to = site_url( 'wp-login.php?resetpass=complete' );
 						wp_safe_redirect( $redirect_to );
 						exit;
@@ -1021,7 +1051,7 @@ if(typeof wpOnload=='function')wpOnload()
 	 * @return bool|WP_Error True: when finish. WP_Error on error
 	 */
 	public static function retrieve_password() {
-		global $wpdb, $current_site;
+		global $wpdb, $wp_hasher;
 
 		$errors = new WP_Error();
 
@@ -1060,14 +1090,19 @@ if(typeof wpOnload=='function')wpOnload()
 		else if ( is_wp_error( $allow ) )
 			return $allow;
 
-		$key = $wpdb->get_var( $wpdb->prepare( "SELECT user_activation_key FROM $wpdb->users WHERE user_login = %s", $user_login ) );
-		if ( empty( $key ) ) {
-			// Generate something random for a key...
-			$key = wp_generate_password( 20, false );
-			do_action( 'retrieve_password_key', $user_login, $key );
-			// Now insert the new md5 key into the db
-			$wpdb->update( $wpdb->users, array( 'user_activation_key' => $key ), array( 'user_login' => $user_login ) );
+		// Generate something random for a password reset key.
+		$key = wp_generate_password( 20, false );
+
+		do_action( 'retrieve_password_key', $user_login, $key );
+
+		// Now insert the key, hashed, into the DB.
+		if ( empty( $wp_hasher ) ) {
+			require_once ABSPATH . WPINC . '/class-phpass.php';
+			$wp_hasher = new PasswordHash( 8, true );
 		}
+		$hashed = $wp_hasher->HashPassword( $key );
+		$wpdb->update( $wpdb->users, array( 'user_activation_key' => $hashed ), array( 'user_login' => $user_login ) );
+
 		$message = __( 'Someone requested that the password be reset for the following account:', 'theme-my-login' ) . "\r\n\r\n";
 		$message .= network_home_url( '/' ) . "\r\n\r\n";
 		$message .= sprintf( __( 'Username: %s', 'theme-my-login' ), $user_login ) . "\r\n\r\n";
@@ -1076,7 +1111,7 @@ if(typeof wpOnload=='function')wpOnload()
 		$message .= '<' . network_site_url( "wp-login.php?action=rp&key=$key&login=" . rawurlencode( $user_login ), 'login' ) . ">\r\n";
 
 		if ( is_multisite() ) {
-			$blogname = $current_site->site_name;
+			$blogname = $GLOBALS['current_site']->site_name;
 		} else {
 			// The blogname option is escaped with esc_html on the way into the database in sanitize_option
 			// we want to reverse this for the plain text arena of emails.
@@ -1095,49 +1130,20 @@ if(typeof wpOnload=='function')wpOnload()
 	}
 
 	/**
-	 * Retrieves a user row based on password reset key and login
-	 *
-	 * @since 6.1.1
-	 * @access public
-	 * @uses $wpdb WordPress Database object
-	 *
-	 * @param string $key Hash to validate sending user's password
-	 * @param string $login The user login
-	 *
-	 * @return object|WP_Error
-	 */
-	public static function check_password_reset_key( $key, $login ) {
-		global $wpdb;
-
-		$key = preg_replace( '/[^a-z0-9]/i', '', $key );
-
-		if ( empty( $key ) || ! is_string( $key ) )
-			return new WP_Error( 'invalid_key', __( 'Invalid key', 'theme-my-login' ) );
-
-		if ( empty( $login ) || ! is_string( $login ) )
-			return new WP_Error( 'invalid_key', __( 'Invalid key', 'theme-my-login' ) );
-
-		$user = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $wpdb->users WHERE user_activation_key = %s AND user_login = %s", $key, $login ) );
-
-		if ( empty( $user ) )
-			return new WP_Error( 'invalid_key', __( 'Invalid key', 'theme-my-login' ) );
-
-		return $user;
-	}
-
-	/**
 	 * Handles resetting the user's password.
 	 *
 	 * @since 6.0
 	 * @access public
 	 * @uses $wpdb WordPress Database object
 	 *
-	 * @param string $key Hash to validate sending user's password
+	 * @param WP_User $user The user
+	 * @param string $new_pass New password for the user
 	 */
 	public static function reset_password( $user, $new_pass ) {
 		do_action( 'password_reset', $user, $new_pass );
 
 		wp_set_password( $new_pass, $user->ID );
+		update_user_option( $user->ID, 'default_password_nag', false, true );
 
 		do_action_ref_array( 'tml_user_password_changed', array( &$user ) );
 	}
