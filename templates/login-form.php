@@ -14,7 +14,7 @@ Theme My Login will always look in your theme's directory first, before using th
 		</p>
 		<p>
 			<label for="user_pass<?php $template->the_instance(); ?>"><?php _e( 'Password', 'theme-my-login' ); ?></label>
-			<input type="password" name="pwd" id="user_pass<?php $template->the_instance(); ?>" class="input" value="" size="20" />
+			<input type="password" name="pwd" id="user_pass<?php $template->the_instance(); ?>" class="input" value="" size="20" autocomplete="off" />
 		</p>
 
 		<?php do_action( 'login_form' ); ?>
