@@ -54,7 +54,11 @@ As of version 6.3, Theme My Login no longer ships with translation files. Transl
 
 Please visit http://www.jfarthing.com/development/theme-my-login.
 
-== Patches ==
+== Patches Changelog ==
+= 6.4 =
+* Redirect of logout is fixed in upstream 6.4
+
+= 6.3.12 =
 * Redirect of logout is wrong.
 * Resolve several calls to deprecated functions.
 * Resolved double echo. A function was called that did an echo, but the function was echoed again.
