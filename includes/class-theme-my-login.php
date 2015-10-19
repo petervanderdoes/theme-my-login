@@ -21,7 +21,7 @@ class Theme_My_Login extends Theme_My_Login_Abstract {
 	 * @since 6.3.2
 	 * @const string
 	 */
-	const version = '6.4';
+	const VERSION = '6.4.1';
 
 	/**
 	 * Holds options key
@@ -778,12 +778,8 @@ if(typeof wpOnload=='function')wpOnload()
 		// User  is logged in
 		if ( is_user_logged_in() ) {
 
-			// Change Login to Logout
-			if ( self::is_tml_page( 'login', $menu_item->object_id ) ) {
-				$menu_item->_invalid = true;
-
-			// Hide Register
-			} elseif ( self::is_tml_page( 'register', $menu_item->object_id ) ) {
+			// Hide login, register and lost password
+			if ( self::is_tml_page( array( 'login', 'register', 'lostpassword' ), $menu_item->object_id ) ) {
 				$menu_item->_invalid = true;
 			}
 
@@ -899,7 +895,7 @@ if(typeof wpOnload=='function')wpOnload()
 	 *
 	 * @since 6.3
 	 *
-	 * @param string $action The action to check
+	 * @param array|string $action An action or array of actions to check
 	 * @param int|object Post ID or object
 	 * @return bool True if $action is for $page, false otherwise
 	 */
@@ -913,7 +909,10 @@ if(typeof wpOnload=='function')wpOnload()
 		if ( ! $page_action = self::get_page_action( $page->ID ) )
 			return false;
 
-		if ( empty( $action ) || $action == $page_action )
+		if ( empty( $action ) )
+			return true;
+
+		if ( in_array( $page_action, (array) $action ) )
 			return true;
 
 		return false;
